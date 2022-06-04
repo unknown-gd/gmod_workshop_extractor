@@ -1,3 +1,4 @@
+-- By PrikolMen#3372
 module( "workshop_downloader_tool", package.seeall )
 
 function Message( ... )
