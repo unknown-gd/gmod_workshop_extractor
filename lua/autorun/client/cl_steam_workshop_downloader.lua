@@ -151,7 +151,7 @@ function SimpleDownload( wsid, dont_unpack )
 end
 
 concommand.Add("workshop_download", function( ply, cmd, args )
-    SimpleDownload( FormatWSID( args[1] ), IsYes( args[2] ) )
+    SimpleDownload( FormatWSID( args[1] ), IsYes( args[2] and args[2]:lower() or nil ) )
 end)
 
 function FolderDelete( folder )
