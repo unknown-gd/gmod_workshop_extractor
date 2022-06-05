@@ -1,5 +1,5 @@
 -- By PrikolMen#3372
-module( "swd", package.seeall )
+module( "workshop_extractor", package.seeall )
 
 local white = color_white
 local orange = Color( 250, 150, 20 )
