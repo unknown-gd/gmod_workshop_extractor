@@ -1,16 +1,56 @@
 -- By PrikolMen#3372
-module( "steam_workshop_downloader", package.seeall )
+module( "swd", package.seeall )
+
+local white = color_white
+local orange = Color( 250, 150, 20 )
 
 function Message( ... )
-    MsgN( "[SWD] ", ... )
+    chat.AddText( orange, "[SWD] ", white, ... )
 end
 
-function FormatWSID( str )
-    return str:match( "https?://steamcommunity%.com/sharedfiles/filedetails/%?.*id=(%d+).*" ) or str
+function AddonInfo( data )
+
+    if (SChat ~= nil) then
+        chat.AddText( data.previewurl )
+    end
+
+    local stars = ""
+    local start_count = math.Round( data.score * 5 )
+    for i = 1, start_count do
+        stars = stars .. "★"
+    end
+
+    for i = 1, 5 - start_count do
+        stars = stars .. "☆"
+    end
+
+    chat.AddText( Color( Lerp( data.score, 255, 0 ), Lerp( data.score, 0, 255 ), 0 ), "[", stars, "] ", orange, data.title )
+
+    chat.AddText( orange, "Updated: ", white, os.date( "%d.%m.%Y in %H:%M", data.updated ) )
+    chat.AddText( orange, "Created: ", white, os.date( "%d.%m.%Y in %H:%M", data.created ) )
+
+    chat.AddText( orange, "Creator: ", white, data.ownername )
+    chat.AddText( orange, "Tags: ", white, string.Replace( data.tags, ",", ", " ) )
+    chat.AddText( orange, "Size: ", white, FormatSizeToMB( data.size ) )
+
+end
+
+function Func( ... )
+    local ok, err = pcall( ... )
+    if (ok) then return end
+    Message( "Error: " .. err )
+end
+
+function FormatWSID( wsid )
+    if isstring( wsid ) then
+        return wsid:match( "https?://steamcommunity%.com/sharedfiles/filedetails/%?.*id=(%d+).*" ) or wsid
+    end
+
+    return wsid
 end
 
 function FormatSizeToMB( number )
-    return math.Round( number / 1024 / 1024, 2 ) .. " MB"
+    return math.Round( number / 1024 / 1024, 3 ) .. " MB"
 end
 
 do
@@ -79,8 +119,20 @@ function SaveFileClass( save_path, file_class, file_size )
     return false
 end
 
-function SaveInfo( save_path, wsid )
-    steamworks.FileInfo(wsid, function( data )
+function Info( wsid, callback )
+    if isstring( wsid ) then
+        steamworks.FileInfo(wsid, function( data )
+            Func( callback, data )
+        end)
+
+        return
+    end
+
+    Message( "Workshop id have error, please check it!" )
+end
+
+function SaveInfo( wsid, save_path )
+    Info( wsid, function( data )
         Save( save_path .. "/" .. "addon.json", util.TableToJSON( data, true ) )
     end)
 end
@@ -96,7 +148,7 @@ function Download( wsid, callback )
     steamworks.DownloadUGC(wsid, function( download_path, file_class )
         local file_size = file_class:Size()
         Message( "Downloaded file: '" .. string.GetFileFromFilename( download_path ) .. "' Size: " .. FormatSizeToMB( file_size ) )
-        pcall( callback, download_path, file_class, file_size )
+        Func( callback, download_path, file_class, file_size )
     end)
 end
 
@@ -115,39 +167,47 @@ cvars.AddChangeCallback("workshop_download_folder", function( name, old, new )
 end, addon_name)
 
 function SimpleDownload( wsid, dont_unpack )
-    Download( wsid, function( download_path, downloaded_file, file_size )
+    if isstring( wsid ) then
+        RunConsoleCommand( "workshop_info", wsid )
 
-        if (dont_unpack) then
-            if SaveFileClass( save_folder .. "/" .. wsid .. ".gma", downloaded_file, file_size ) then
-                Message( "Successfully saved! (data/" .. save_folder .. "/" .. wsid .. ".gma)" )
+        Download( wsid, function( download_path, downloaded_file, file_size )
+
+            if (dont_unpack) then
+                if SaveFileClass( save_folder .. "/" .. wsid .. ".gma", downloaded_file, file_size ) then
+                    Message( "Successfully saved! (data/" .. save_folder .. "/" .. wsid .. ".gma)" )
+                    return
+                end
+
+                Message( wsid .. ".gma saving failed!" )
+
                 return
             end
 
-            Message( wsid .. ".gma saving failed!" )
+            local ok, files = Mount( download_path )
+            if (ok) then
 
-            return
-        end
-
-        local ok, files = Mount( download_path )
-        if (ok) then
-
-            local save_path = CreateFolder( save_folder .. "/" ..  wsid )
-            for num, file_path in ipairs( files ) do
-                local file_class = file.Open( file_path, "rb", "GAME" )
-                if (file_class ~= nil) then
-                    CreateFolder( save_path .. "/" .. string.GetPathFromFilename( file_path ) )
-                    SaveFileClass( save_path .. "/" ..  file_path, file_class )
+                local save_path = CreateFolder( save_folder .. "/" ..  wsid )
+                for num, file_path in ipairs( files ) do
+                    local file_class = file.Open( file_path, "rb", "GAME" )
+                    if (file_class ~= nil) then
+                        CreateFolder( save_path .. "/" .. string.GetPathFromFilename( file_path ) )
+                        SaveFileClass( save_path .. "/" ..  file_path, file_class )
+                    end
                 end
+
+                SaveInfo( wsid, save_path )
+                Message( wsid .. " successfully saved! (data/" .. save_folder .. "/" .. wsid .. "/)" )
+
+                return
             end
 
-            SaveInfo( save_path, wsid )
-            Message( wsid .. " successfully saved! (data/" .. save_folder .. "/" .. wsid .. "/)" )
+            Message( wsid .. " saving failed!" )
+        end)
 
-            return
-        end
+        return
+    end
 
-        Message( wsid .. " saving failed!" )
-    end)
+    Message( "Workshop id have error, please check it!" )
 end
 
 concommand.Add("workshop_download", function( ply, cmd, args )
@@ -193,8 +253,12 @@ end)
 
 concommand.Add("workshop_downloaded", function()
     local files, folders = file.Find( save_folder .. "/*", "DATA" )
-    MsgN( util.TableToJSON({
+    Message( "Downloaded: " .. util.TableToJSON({
         ["Folders"] = folders,
         ["Files"] = files
     }, true ) )
+end)
+
+concommand.Add("workshop_info", function( ply, cmd, args )
+    Info( FormatWSID( args[1] ), AddonInfo )
 end)
