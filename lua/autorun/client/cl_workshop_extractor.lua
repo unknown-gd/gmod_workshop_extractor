@@ -146,9 +146,14 @@ end
 
 function Download( wsid, callback )
     steamworks.DownloadUGC(wsid, function( download_path, file_class )
-        local file_size = file_class:Size()
-        Message( "Downloaded file: '" .. string.GetFileFromFilename( download_path ) .. "' Size: " .. FormatSizeToMB( file_size ) )
-        Func( callback, download_path, file_class, file_size )
+        if (file_class ~= nil) then
+            local file_size = file_class:Size()
+            Message( "Downloaded file: '" .. string.GetFileFromFilename( download_path ) .. "' Size: " .. FormatSizeToMB( file_size ) )
+            Func( callback, download_path, file_class, file_size )
+            return
+        end
+
+        Material( "Downloading failed!" )
     end)
 end
 
